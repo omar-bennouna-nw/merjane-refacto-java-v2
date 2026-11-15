@@ -17,6 +17,7 @@ import static org.junit.Assert.assertEquals;
 // import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
@@ -52,9 +53,27 @@ public class MyControllerIntegrationTests {
                 order = orderRepository.save(order);
                 mockMvc.perform(post("/orders/{orderId}/processOrder", order.getId())
                                 .contentType("application/json"))
-                                .andExpect(status().isOk());
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(order.getId()));
                 Order resultOrder = orderRepository.findById(order.getId()).get();
                 assertEquals(resultOrder.getId(), order.getId());
+        }
+
+        @Test
+        public void processOrderWithUnknownProductTypeShouldReturn422() throws Exception {
+                Product unknown = new Product(null, 1, 1, "UNKNOWN", "Mystery", null, null, null);
+                productRepository.save(unknown);
+                Order order = orderRepository.save(createOrder(new HashSet<>(List.of(unknown))));
+
+                mockMvc.perform(post("/orders/{orderId}/processOrder", order.getId()))
+                                .andExpect(status().isUnprocessableEntity())
+                                .andExpect(jsonPath("$.message").exists());
+        }
+
+        @Test
+        public void processUnknownOrderShouldReturn404() throws Exception {
+                mockMvc.perform(post("/orders/{orderId}/processOrder", 999999L))
+                                .andExpect(status().isNotFound());
         }
 
         private static Order createOrder(Set<Product> products) {
